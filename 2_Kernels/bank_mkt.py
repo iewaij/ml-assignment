@@ -1,10 +1,11 @@
 import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 
+
 def import_dataset(filename):
     """
     Import the dataset from the path.
-    
+
     Parameters
     ----------
         filename : str
@@ -23,9 +24,9 @@ def import_dataset(filename):
         true_values=["yes", "success"],
         false_values=["no", "failure"],
     )
-    # Treat pdays = 999 as missing values
-    bank_mkt["pdays"] = bank_mkt["pdays"].replace(999, pd.NA)
-    # `month` will be encoded to the corresponding number, e.g. "mar" -> 3
+    # Drop 12 duplicated rows
+    bank_mkt = bank_mkt.drop_duplicates().reset_index(drop=True)
+    # `month` will be encoded to the corresponding number, i.e. "mar" -> 3
     month_map = {
         "mar": 3,
         "apr": 4,
@@ -39,6 +40,22 @@ def import_dataset(filename):
         "dec": 12,
     }
     bank_mkt["month"] = bank_mkt["month"].replace(month_map)
+    # Add days since lehman brothers bankcrupt
+    bank_mkt.loc[bank_mkt.index < 27682, "year"] = 2008
+    bank_mkt.loc[(27682 <= bank_mkt.index) & (bank_mkt.index < 39118), "year"] = 2009
+    bank_mkt.loc[39118 <= bank_mkt.index, "year"] = 2010
+    bank_mkt["year"] = bank_mkt["year"].astype("int")
+    bank_mkt["date"] = pd.to_datetime(bank_mkt[["month", "year"]].assign(day=1))
+    bank_mkt["lehman"] = pd.to_datetime("2008-09-15")
+    bank_mkt["days"] = bank_mkt["date"] - bank_mkt["lehman"]
+    bank_mkt["days"] = bank_mkt["days"].dt.days
+    # Drop data before 2008
+    bank_mkt = bank_mkt.loc[bank_mkt.index > 27682, :]
+    # Drop date and lehman columns
+    bank_mkt = bank_mkt.drop(columns=["lehman", "year", "date"])
+    # Treat pdays = 999 as missing values -999
+    bank_mkt["pdays"] = bank_mkt["pdays"].replace(999, -999)
+
     # `day_of_week` will be encoded to the corresponding number, e.g. "wed" -> 3
     dow_map = {"mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5}
     bank_mkt["day_of_week"] = bank_mkt["day_of_week"].replace(dow_map)
@@ -55,23 +72,24 @@ def import_dataset(filename):
             "y": "boolean",
         }
     )
-    # Drop 12 duplicated rows
-    bank_mkt = bank_mkt.drop_duplicates().reset_index(drop=True)
     # Drop demographic data to improve model performace
-    bank_mkt = bank_mkt.drop(columns=["age", "job", "marital", "education", "housing", "loan", "default"])
+    bank_mkt = bank_mkt.drop(
+        columns=["age", "job", "marital", "education", "housing", "loan", "default"]
+    )
     return bank_mkt
+
 
 def split_dataset(data, preprocessor=None, test_size=0.3, random_state=42):
     """
     Split dataset into train, test and validation sets using preprocessor.
     Because the random state of validation set is not specified, the validation set will be different each time when the function is called.
-    
+
     Parameters
     ----------
         data : DataFrame
         preprocessor : Pipeline
         random_state : int
-    
+
     Returns
     -------
         datasets : tuple
@@ -92,7 +110,7 @@ def split_dataset(data, preprocessor=None, test_size=0.3, random_state=42):
     train_test_split = StratifiedShuffleSplit(
         n_splits=1, test_size=test_size, random_state=random_state
     )
-    
+
     for train_index, test_index in train_test_split.split(
         data.drop("y", axis=1), data["y"]
     ):
@@ -108,12 +126,8 @@ def split_dataset(data, preprocessor=None, test_size=0.3, random_state=42):
         X_train = preprocessor.fit_transform(X_train, y_train)
         X_test = preprocessor.transform(X_test)
 
-    return (
-        X_train,
-        y_train,
-        X_test,
-        y_test
-    )
+    return (X_train, y_train, X_test, y_test)
+
 
 def transform(
     X,
@@ -144,25 +158,6 @@ def transform(
     X = dftransform(bank_mkt)
     """
     X = X.copy()
-
-    if gen != None:
-        if "year" in gen or "days" in gen:
-            X.loc[X.index < 27682, "year"] = 2008
-            X.loc[(27682 <= X.index) & (X.index < 39118), "year"] = 2009
-            X.loc[39118 <= X.index, "year"] = 2010
-            X["year"] = X["year"].astype("int")
-        if "days" in gen:
-            X["date"] = pd.to_datetime(X[["month", "year"]].assign(day=1))
-            X["lehman"] = pd.to_datetime("2008-09-15")
-            X["days"] = X["date"] - X["lehman"]
-            X["days"] = X["days"].dt.days
-            X = X.drop(["lehman", "year", "date"], axis=1)
-        if "has_previous" in gen:
-            X["has_previous"] = X["previous"] > 0
-        if "has_default" in gen:
-            X["has_default"] = X["default"].notna()
-        if "has_marital" in gen:
-            X["has_marital"] = X["marital"].notna()
 
     if cut != None:
         if "pdays" in cut:

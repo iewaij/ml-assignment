@@ -140,3 +140,4 @@ cython_debug/
 # Others
 .DS_Store
 .ipynb_checkpoints
+.vscode
