@@ -61,7 +61,7 @@ def import_dataset(filename):
     bank_mkt = bank_mkt.drop(columns=["age", "job", "marital", "education", "housing", "loan", "default"])
     return bank_mkt
 
-def split_dataset(data, preprocessor=None, random_state=42):
+def split_dataset(data, preprocessor=None, test_size=0.3, random_state=42):
     """
     Split dataset into train, test and validation sets using preprocessor.
     Because the random state of validation set is not specified, the validation set will be different each time when the function is called.
@@ -90,8 +90,9 @@ def split_dataset(data, preprocessor=None, random_state=42):
         X_train, y_train, *other_sets = split_dataset(data, OneHotEncoder())
     """
     train_test_split = StratifiedShuffleSplit(
-        n_splits=1, test_size=0.2, random_state=random_state
+        n_splits=1, test_size=test_size, random_state=random_state
     )
+    
     for train_index, test_index in train_test_split.split(
         data.drop("y", axis=1), data["y"]
     ):
@@ -103,31 +104,15 @@ def split_dataset(data, preprocessor=None, random_state=42):
     X_test = test_set.drop(["duration", "y"], axis=1)
     y_test = test_set["y"].astype("int").to_numpy()
 
-    train_validate_split = StratifiedShuffleSplit(n_splits=1, test_size=0.2)
-    for ttrain_index, validate_index in train_validate_split.split(X_train, y_train):
-        ttrain_set = train_set.iloc[ttrain_index]
-        validate_set = train_set.iloc[validate_index]
-
-    X_ttrain = ttrain_set.drop(["duration", "y"], axis=1)
-    y_ttrain = ttrain_set["y"].astype("int").to_numpy()
-    X_validate = validate_set.drop(["duration", "y"], axis=1)
-    y_validate = validate_set["y"].astype("int").to_numpy()
-
     if preprocessor != None:
         X_train = preprocessor.fit_transform(X_train, y_train)
         X_test = preprocessor.transform(X_test)
-        X_ttrain = preprocessor.fit_transform(X_ttrain, y_ttrain)
-        X_validate = preprocessor.transform(X_validate)
 
     return (
         X_train,
         y_train,
         X_test,
-        y_test,
-        X_ttrain,
-        y_ttrain,
-        X_validate,
-        y_validate,
+        y_test
     )
 
 def transform(
