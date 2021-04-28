@@ -1,5 +1,4 @@
 import pandas as pd
-from sklearn.model_selection import StratifiedShuffleSplit
 
 
 def import_dataset(filename):
@@ -107,6 +106,8 @@ def split_dataset(data, preprocessor=None, test_size=0.3, random_state=42):
         # To unpack only train set.
         X_train, y_train, *other_sets = split_dataset(data, OneHotEncoder())
     """
+    from sklearn.model_selection import StratifiedShuffleSplit
+
     train_test_split = StratifiedShuffleSplit(
         n_splits=1, test_size=test_size, random_state=random_state
     )
@@ -204,3 +205,75 @@ def transform(
         X = X.astype("float")
 
     return X
+
+
+def evaluate(X_train, y_train, X_test, y_test, clf=None):
+    """
+    Evaluate classifier's performance on train, validation and test sets.
+
+    Parameters
+    ----------
+        clf : estimator, default = None
+    """
+    from sklearn.metrics import (
+        average_precision_score,
+        precision_score,
+        recall_score,
+        balanced_accuracy_score,
+        roc_auc_score,
+    )
+
+    X_sets = [X_train, X_test]
+    y_sets = [y_train, y_test]
+
+    metric_names = ["TNR", "TPR", "REC", "PRE", "bACC", "ROC", "AP"]
+    set_names = ["Train", "Test"]
+    metric_df = pd.DataFrame(index=metric_names, columns=set_names)
+
+    for name, X, y in zip(set_names, X_sets, y_sets):
+        y_pred = clf.predict(X)
+
+        try:
+            y_score = clf.decision_function(X)
+        except AttributeError:
+            y_score = clf.predict_proba(X)[:, 1]
+
+        metrics = [
+            recall_score(y, y_pred, pos_label=0),
+            recall_score(y, y_pred),
+            recall_score(y, y_pred),
+            precision_score(y, y_pred),
+            balanced_accuracy_score(y, y_pred),
+            roc_auc_score(y, y_score),
+            average_precision_score(y, y_score),
+        ]
+        metric_df[name] = metrics
+
+    return metric_df
+
+
+def search(X_train, y_train, X_test, y_test, clf, param_distributions, scoring):
+    """
+    Tune classifier's parameters using randomized search.
+
+    Parameters
+    ----------
+        clf : estimator, default = None
+    """
+    from sklearn.model_selection import RandomizedSearchCV
+    from warnings import filterwarnings
+
+    filterwarnings("ignore")
+
+    search = RandomizedSearchCV(
+        clf, param_distributions, scoring=scoring, cv=3, n_jobs=-1
+    )
+
+    fit = search.fit(X_train, y_train)
+
+    print(
+        f"best parameters found: {fit.best_params_},",
+        f"with mean test score: {fit.best_score_}.",
+    )
+
+    return evaluate(X_train, y_train, X_test, y_test, search)
