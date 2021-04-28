@@ -49,7 +49,7 @@ def import_dataset(filename):
     bank_mkt["lehman"] = pd.to_datetime("2008-09-15")
     bank_mkt["days"] = bank_mkt["date"] - bank_mkt["lehman"]
     bank_mkt["days"] = bank_mkt["days"].dt.days
-    # Drop data before 2008
+    # Drop data before 2009
     bank_mkt = bank_mkt.loc[bank_mkt.index > 27682, :]
     # Drop date and lehman columns
     bank_mkt = bank_mkt.drop(columns=["lehman", "year", "date"])
